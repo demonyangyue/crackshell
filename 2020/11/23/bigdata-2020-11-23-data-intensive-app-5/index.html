@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="utf-8">
+  
+  <title>设计数据密集型应用 —— 分区 | crackshell</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="序言在大数据的场景中，单机节点常常无法满足海量数据的存储和访问需求，我们需要把数据库切成多块，分别存储到不同的节点。每一块数据被称作一个分区(partition)，有时也被称作分片(sharding)。 使用分区是为了实现扩展性(scalability)。不同的分区存储在不同的节点上，一次查询请求就可以分发到多个节点，在每个节点上并发执行，收集各个节点的返回数据并获得最终结果。 分区和副本常常是结">
+<meta name="keywords" content="Cloud Computing,Big Data">
+<meta property="og:type" content="article">
+<meta property="og:title" content="设计数据密集型应用 —— 分区">
+<meta property="og:url" content="http://demonyangyue.github.io/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/index.html">
+<meta property="og:site_name" content="crackshell">
+<meta property="og:description" content="序言在大数据的场景中，单机节点常常无法满足海量数据的存储和访问需求，我们需要把数据库切成多块，分别存储到不同的节点。每一块数据被称作一个分区(partition)，有时也被称作分片(sharding)。 使用分区是为了实现扩展性(scalability)。不同的分区存储在不同的节点上，一次查询请求就可以分发到多个节点，在每个节点上并发执行，收集各个节点的返回数据并获得最终结果。 分区和副本常常是结">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16055741172691.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16057632294928.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16055751116331.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16057125248296.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16057129567799.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16052349733224/16060441715411.jpg">
+<meta property="og:updated_time" content="2020-11-23T15:41:44.260Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="设计数据密集型应用 —— 分区">
+<meta name="twitter:description" content="序言在大数据的场景中，单机节点常常无法满足海量数据的存储和访问需求，我们需要把数据库切成多块，分别存储到不同的节点。每一块数据被称作一个分区(partition)，有时也被称作分片(sharding)。 使用分区是为了实现扩展性(scalability)。不同的分区存储在不同的节点上，一次查询请求就可以分发到多个节点，在每个节点上并发执行，收集各个节点的返回数据并获得最终结果。 分区和副本常常是结">
+<meta name="twitter:image" content="http://demonyangyue.github.io/images/media/16052349733224/16055741172691.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="crackshell" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">crackshell</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">Hack on heaven&#39;s door</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://demonyangyue.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-bigdata-2020-11-23-data-intensive-app-5" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/" class="article-date">
+  <time datetime="2020-11-22T16:00:00.000Z" itemprop="datePublished">2020-11-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/Programming/">Programming</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      设计数据密集型应用 —— 分区
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="序言"><a href="#序言" class="headerlink" title="序言"></a>序言</h2><p>在大数据的场景中，单机节点常常无法满足海量数据的存储和访问需求，我们需要把数据库切成多块，分别存储到不同的节点。每一块数据被称作一个<code>分区</code>(partition)，有时也被称作<code>分片</code>(sharding)。</p>
+<p>使用分区是为了实现<strong>扩展性</strong>(scalability)。不同的分区存储在不同的节点上，一次查询请求就可以分发到多个节点，在每个节点上并发执行，收集各个节点的返回数据并获得最终结果。</p>
+<p>分区和副本常常是结合在一起使用的。一份数据被存储在某个分区，同一个分区又复制多个副本存储。下图是一个单主集群的存储示例:</p>
+<p><img src="/images/media/16052349733224/16055741172691.jpg" alt></p>
+<a id="more"></a>
+<h2 id="分区算法"><a href="#分区算法" class="headerlink" title="分区算法"></a>分区算法</h2><p>我们需要找到一种算法，以确定某条记录属于哪一个分区。算法的核心目标是:所有的数据在各个分区<strong>均匀分布</strong>(fair share)，只有这样才能达到扩展性的效果。</p>
+<p>如果分布不均匀的话，就会出现<code>数据倾斜</code>(skewed)————大部分的数据集中在少数的分区，那么这些分区就会成为<code>热点</code>(hot spot)，热点接收大量的读写请求，成为系统的性能瓶颈。</p>
+<h3 id="基于键范围的分区"><a href="#基于键范围的分区" class="headerlink" title="基于键范围的分区"></a>基于键范围的分区</h3><p>实现分区的一种方式，是根据键的范围来确定分区，每一个分区负责存储一段范围的键值，就像一套百科全书，每一卷负责一段范围的关键词:</p>
+<p><img src="/images/media/16052349733224/16057632294928.jpg" alt></p>
+<p>我们不需要平均划分键范围，而是可以根据数据分布的特征来手动调整范围。每一个分区内部，数据被排序后存储，这样的存储方式使得范围扫描操作很高效。</p>
+<p>当主键设计得不好的时候，基于键范围的分区就可能会出现数据热点。例如，如果把时间戳作为主键，那么最近更新的数据都会被存储到同一个分区中，针对最最新数据的查询都会请求这一个分区，造成数据热点。</p>
+<p>在现实系统中，Hbase采用了基于键范围的分区方式。</p>
+<h3 id="基于哈希函数的分区"><a href="#基于哈希函数的分区" class="headerlink" title="基于哈希函数的分区"></a>基于哈希函数的分区</h3><p>另一种常见的算法是使用<code>哈希函数</code>(hash function)，基于数据的键(key)计算哈希值，来确定所属的分区。数据分布是否均匀，是评价哈希函数性能的标准。</p>
+<p>确定哈希函数之后，可以配置各个分区存储一个哈希范围区间数据。对于一条记录来说，如果它的键的哈希值落在了某个区间范围，就被存储到负责这个范围的分区节点:</p>
+<p><img src="/images/media/16052349733224/16055751116331.jpg" alt></p>
+<p>哈希函数的引入带来了一个问题:相邻的数据被打散存储到不同的分区节点。对于数据的范围查询，常常需要访问大量的分区节点，导致性能较差。</p>
+<p>针对这个问题，可以使用<code>组合键</code>(compound primary key)的方式：组合键的第一列作为哈希函数计算分区的依据，剩余列作为数据排序的依据。<code>Cassandra</code>和<code>Hbase</code>中都采用了类似的方案。</p>
+<p>在数据查询的时候，如果第一列的值是指定的，剩余列的范围查询就会很高效，因为只需要访问少量的分区节点。一对多数据模型的场景，很适合使用这种方式，例如一个社交网站应用，把(user_id, update_timestamp)作为组合键，那么查询某个用户在一段时间范围内变更的数据，就会很高效。</p>
+<h3 id="处理数据倾斜"><a href="#处理数据倾斜" class="headerlink" title="处理数据倾斜"></a>处理数据倾斜</h3><p>通过哈希算法可以把数据分散到各个分区，但是有时候仍然不能避免极端情况下出现数据倾斜。比如在某个时间点，所有的读写请求都是针对同一个key，那么所有的请求都会被发送到同一个分区。</p>
+<p>目前大部分系统都没有自动处理数据倾斜的能力，所以需要应用程序去处理可能出现的数据倾斜。</p>
+<p>如果已知某个key是热点，那么可行的做法是在key的开头或者末尾加上2位随机数，这样就可以把热点key重新打散到100个分区。</p>
+<h2 id="分区与二级索引"><a href="#分区与二级索引" class="headerlink" title="分区与二级索引"></a>分区与二级索引</h2><p>当通过<code>主键</code>(primary key)访问数据时，我们可以通过哈希函数计算对应的分区，然后在分区中快速找到对应的数据。</p>
+<p>但是当需要通过数据的其它字段的值去查询时，就无法通过主键达成目的了，此时我们需要引入二级索引。</p>
+<p>分区的存在增加了二级索引实现的复杂度，所以很多分布式数据库没有支持二级索引，比如Hbase。下面我们来看看二级索引的两种主要的实现方式：基于<code>文档</code>(document)切分的二级索引与基于<code>项</code>(term)切分的二级索引。</p>
+<h3 id="基于文档切分的二级索引"><a href="#基于文档切分的二级索引" class="headerlink" title="基于文档切分的二级索引"></a>基于文档切分的二级索引</h3><p>假设我们将一个汽车销售网站的海量数据按分区存储。每一辆汽车有一个id作为主键，当我们需要按颜色或者制造商查询数据的时候，就需要使用二级索引。</p>
+<p>基于文档切分的二级索引，为每一个数据分区，维护对应的二级索引，并且把二级索引也存储在这个分区(local index):</p>
+<p><img src="/images/media/16052349733224/16057125248296.jpg" alt></p>
+<p>按照这样的方式，写入操作将十分高效:向某个分区写入数据时，在该分区对应的二级索引插入相应的id即可。</p>
+<p>但是查询操作将变得昂贵，如果要查询所有颜色是红色的汽车，需要扫描所有的分区，查询相应的记录并汇集起来。</p>
+<p><code>MongoDB</code>、<code>Cassandra</code>、<code>Elasticsearch</code>实现了基于文档切分的二级索引。</p>
+<h3 id="基于项切分的二级索引"><a href="#基于项切分的二级索引" class="headerlink" title="基于项切分的二级索引"></a>基于项切分的二级索引</h3><p>基于文档切分的二级索引采用了local index方案，另一种方式是使用global index方案，以全局的方式存储二级索引。当然我们不能把二级索引全部存储在同一个节点，那样会造成访问热点。可以基于<code>项</code>(term)把二级索引切分存储。</p>
+<p><img src="/images/media/16052349733224/16057129567799.jpg" alt></p>
+<p>在上图的示例中，我们把所有颜色为a到s开头的二级索引存储到分区0，把所有r到z开头的二级索引存储到分区1。我们不仅可以通过范围对二级索引进行分区，也可以使用哈希函数进行分区。</p>
+<p>此时查找所有颜色为红色的汽车，只需要读取分区1的二级索引即可，非常高效。但是相应的写入操作会变得更加复杂，插入一条数据可能设涉及到多个字段的内容，需要修改多个分区存储的二级索引。</p>
+<p><code>Amazon DynamoDB</code> 、<code>Oracle data warehouse</code>实现了基于项切分的二级索引。</p>
+<h2 id="重新平衡分区"><a href="#重新平衡分区" class="headerlink" title="重新平衡分区"></a>重新平衡分区</h2><p>数据库的分区数量，以及每个分区存储的数据量，是不断动态变化的。在某些场景下，我们需要对分区执行<strong>重新平衡</strong>(rebalancing)操作：</p>
+<ul>
+<li>查询的数据吞吐量增加，希望通过增加节点来增强负载处理能力。</li>
+<li>数据库的数据量增加了，希望通过添加更多的内存和硬盘来存储数据。</li>
+<li>某台机器挂了，这台机器上分区存储的数据，需要被重新存储到其它分区。</li>
+</ul>
+<p>对于分区重新平衡操作，期望满足以下目标:</p>
+<ul>
+<li>操作完成之后，集群的负载(数据量、读请求、写请求)在各个区间均衡分布。</li>
+<li>操作期间，数据库正常向外提供服务。</li>
+<li>只对部分必要的数据进行移动，避免移动大量的数据在集群中引发高负载。</li>
+</ul>
+<h3 id="固定数量分区"><a href="#固定数量分区" class="headerlink" title="固定数量分区"></a>固定数量分区</h3><p>可以预先设置一个远超节点数量的分区总数N，并保持N不变，然后让每个节点负责存储某几个分区的数据。</p>
+<p>当集群中新增加一个节点时，这个节点可以从其他节点<code>窃取</code>(steal)几个分区的数据，以保持各个节点数据量的均衡，并且只需要移动几个分区的数据。</p>
+<p><img src="/images/media/16052349733224/16060441715411.jpg" alt></p>
+<h3 id="动态分区"><a href="#动态分区" class="headerlink" title="动态分区"></a>动态分区</h3><p>动态分区的核心思想，是基于数据量的大小来动态调整分区的数量。</p>
+<p>当某个分区的数据量超过设定的阈值时，该分区就自动*<em>分裂</em>(split)成两个分区，一个分区存放在原来的节点，另一个分区移动到新的节点存储。</p>
+<p>Hbase就采用了这种动态分区的实现方式。</p>
+<h3 id="按比例分区"><a href="#按比例分区" class="headerlink" title="按比例分区"></a>按比例分区</h3><p>另外一种分区算法，是保持每个节点的分区数量不变，分区的总数和节点的数量成正比。</p>
+<p>假设每个节点的分区数量设置为n。当集群中新增加一个节点之后，会随机选择n个分区，每个分区分裂成两个新分区，一个新分区存储在原来的节点，另一个新分区存储在新增的节点，以此来保证节点的分区数量仍然为n。</p>
+<p><code>Cassandra</code>采用了按比例分区算法。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本章我们主要介绍了大数据集的分区算法。当数据集的大小超越了单机节点处理能力时，就有必要对数据集进行分区。</p>
+<p>分区算法的核心目标是让各个节点之间的数据保持均衡，避免出现数据热点和性能瓶颈。有两种主要的分区算法:</p>
+<ul>
+<li>基于键范围的分区。将数据的键排序，每一个分区负责管理一段范围的键。</li>
+<li>基于哈希算法的分区。将数据的键按哈希函数打散，每一个分区负责管理一段哈希值范围。</li>
+</ul>
+<p>我们还介绍了二级索引的实现方式：</p>
+<ul>
+<li>基于文档的二级索引。将二级索引和对应的数据内容存放在同一个节点。这种方式降低了写操作的成本，但是增加了读操作的成本。</li>
+<li>基于项的二级索引。对二级索引打散之后存储到相应的节点。这种方式降低了读操作的成本，但是增加了写操作的成本。</li>
+</ul>
+<p>最后，为了让各分区的数据始终保持平衡，我们还介绍了多种分区再平衡算法，比如<code>固定数量分区</code>、<code>动态分区</code>以及<code>按比例分区</code>。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://demonyangyue.github.io/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/" data-id="ckhupre8e00010ulz50a349wz" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">设计数据密集型应用 —— 副本</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/Miscellaneous/">Miscellaneous</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/Programming/">Programming</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/Akka/">Akka</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Concurrent-Programming/">Concurrent Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Flink/">Flink</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Guava/">Guava</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Interperter/">Interperter</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Java/">Java</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/JavaScript/">JavaScript</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Mesos/">Mesos</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Meta-Programming/">Meta Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Rails/">Rails</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ruby/">Ruby</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scala/">Scala</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scheme/">Scheme</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Spark/">Spark</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Streaming-System/">Streaming System</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Web/">Web</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/jQuery/">jQuery</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/杂项/">杂项</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/Akka/" style="font-size: 16.67px;">Akka</a> <a href="/tags/Big-Data/" style="font-size: 13.33px;">Big Data</a> <a href="/tags/Cloud-Computing/" style="font-size: 20px;">Cloud Computing</a> <a href="/tags/Concurrent-Programming/" style="font-size: 10px;">Concurrent Programming</a> <a href="/tags/Flink/" style="font-size: 11.67px;">Flink</a> <a href="/tags/Guava/" style="font-size: 10px;">Guava</a> <a href="/tags/Interperter/" style="font-size: 10px;">Interperter</a> <a href="/tags/Java/" style="font-size: 11.67px;">Java</a> <a href="/tags/JavaScript/" style="font-size: 15px;">JavaScript</a> <a href="/tags/Mesos/" style="font-size: 10px;">Mesos</a> <a href="/tags/Meta-Programming/" style="font-size: 13.33px;">Meta Programming</a> <a href="/tags/Rails/" style="font-size: 16.67px;">Rails</a> <a href="/tags/Ruby/" style="font-size: 13.33px;">Ruby</a> <a href="/tags/Scala/" style="font-size: 18.33px;">Scala</a> <a href="/tags/Scheme/" style="font-size: 10px;">Scheme</a> <a href="/tags/Spark/" style="font-size: 10px;">Spark</a> <a href="/tags/Streaming-System/" style="font-size: 11.67px;">Streaming System</a> <a href="/tags/Web/" style="font-size: 16.67px;">Web</a> <a href="/tags/jQuery/" style="font-size: 15px;">jQuery</a> <a href="/tags/杂项/" style="font-size: 10px;">杂项</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/11/">November 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/05/">May 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">January 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">December 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">September 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/08/">August 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/05/">May 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">April 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">September 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/06/">June 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/05/">May 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/04/">April 2015</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/">设计数据密集型应用 —— 分区</a>
+          </li>
+        
+          <li>
+            <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/">设计数据密集型应用 —— 副本</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/">设计数据密集型应用3 —— 数据存储与读取</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/13/bigdata-2020-09-13-data-intensive-app-2/">设计数据密集型应用2 —— 数据模型与查询语言</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/06/bigdata-2020-09-06-data-intensive-app-1/">设计数据密集型应用1 —— 序</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 Yang, Yue<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>

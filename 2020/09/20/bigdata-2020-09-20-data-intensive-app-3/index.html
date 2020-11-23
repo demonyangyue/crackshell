@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="utf-8">
+  
+  <title>设计数据密集型应用3 —— 数据存储与读取 | crackshell</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="序言上一篇我们介绍了数据模型和查询语言相关的原理，本篇我们介绍实际的数据库引擎，数据存储和读取的实现方式。当实际工作中遇到数据库选型和性能调优的问题时，掌握这些知识至关重要。 不同类型的存储引擎，会针对不同类型的负载做优化。事务处理(online transaction processing, OLTP)的场景与数据分析(online analytic processing, OLAP)的场景，对">
+<meta name="keywords" content="Cloud Computing,Big Data">
+<meta property="og:type" content="article">
+<meta property="og:title" content="设计数据密集型应用3 —— 数据存储与读取">
+<meta property="og:url" content="http://demonyangyue.github.io/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/index.html">
+<meta property="og:site_name" content="crackshell">
+<meta property="og:description" content="序言上一篇我们介绍了数据模型和查询语言相关的原理，本篇我们介绍实际的数据库引擎，数据存储和读取的实现方式。当实际工作中遇到数据库选型和性能调优的问题时，掌握这些知识至关重要。 不同类型的存储引擎，会针对不同类型的负载做优化。事务处理(online transaction processing, OLTP)的场景与数据分析(online analytic processing, OLAP)的场景，对">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16007379792606.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16008244029789.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16011707857761.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16013514221617.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16014306000210.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16026389779132.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16027253818811.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16027262106232.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16027262263381.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16031136914757.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16003048433369/16031188051091.jpg">
+<meta property="og:updated_time" content="2020-11-23T15:40:19.790Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="设计数据密集型应用3 —— 数据存储与读取">
+<meta name="twitter:description" content="序言上一篇我们介绍了数据模型和查询语言相关的原理，本篇我们介绍实际的数据库引擎，数据存储和读取的实现方式。当实际工作中遇到数据库选型和性能调优的问题时，掌握这些知识至关重要。 不同类型的存储引擎，会针对不同类型的负载做优化。事务处理(online transaction processing, OLTP)的场景与数据分析(online analytic processing, OLAP)的场景，对">
+<meta name="twitter:image" content="http://demonyangyue.github.io/images/media/16003048433369/16007379792606.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="crackshell" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">crackshell</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">Hack on heaven&#39;s door</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://demonyangyue.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-bigdata-2020-09-20-data-intensive-app-3" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/" class="article-date">
+  <time datetime="2020-09-19T16:00:00.000Z" itemprop="datePublished">2020-09-20</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/Programming/">Programming</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      设计数据密集型应用3 —— 数据存储与读取
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="序言"><a href="#序言" class="headerlink" title="序言"></a>序言</h2><p>上一篇我们介绍了数据模型和查询语言相关的原理，本篇我们介绍实际的数据库引擎，数据存储和读取的实现方式。当实际工作中遇到数据库选型和性能调优的问题时，掌握这些知识至关重要。</p>
+<p>不同类型的存储引擎，会针对不同类型的负载做优化。事务处理(online transaction processing, OLTP)的场景与数据分析(online analytic processing, OLAP)的场景，对应的存储引擎设计方案差距巨大。</p>
+<p>我们来看看主流数据库中使用最多的两种数据引擎:日志结构的存储引擎(Log Structured Merge Tree，LSM-Tree)与页结构的存储引擎(B-Tree)</p>
+<a id="more"></a>
+<h2 id="从0到1设计数据库"><a href="#从0到1设计数据库" class="headerlink" title="从0到1设计数据库"></a>从0到1设计数据库</h2><p>我们来实现一个最简单的数据库:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"><span class="function"><span class="title">db_set</span></span> () &#123;</span><br><span class="line"><span class="built_in">echo</span> <span class="string">"<span class="variable">$1</span>,<span class="variable">$2</span>"</span> &gt;&gt; database</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="title">db_get</span></span> () &#123;</span><br><span class="line">grep <span class="string">"^<span class="variable">$1</span>,"</span> database | sed -e <span class="string">"s/^<span class="variable">$1</span>,//"</span> | tail -n 1</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>通过两个简单的shell函数，就实现了一个可以存储键-值对的极简版数据库。<code>db_set()</code>向database文件中插入数据，<code>db_get()</code>读取相应key的最近一条记录。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ db_set 42 <span class="string">'&#123;"name":"San Francisco","attractions":["Golden Gate Bridge"]&#125;'</span>]</span><br><span class="line"></span><br><span class="line">$ db_get 42</span><br><span class="line"></span><br><span class="line">&#123;<span class="string">"name"</span>:<span class="string">"San Francisco"</span>,<span class="string">"attractions"</span>:[<span class="string">"Golden Gate Bridge"</span>]&#125;</span><br></pre></td></tr></table></figure>
+<p><code>db_set()</code>采用的是追加写的方式，每次将数据追加到数据库的末尾。如果对同一个key进行了多次更新操作，旧版本的数据不会被覆盖掉，所以<code>db_get()</code>使用了<code>tail -n 1</code>来获取最新版本的记录。</p>
+<p>追加写的性能非常好。现实中的很多数据库，底层使用了和<code>db_set()</code>类似的日志文件，通过追加写的方式更新数据。当然实际的数据库有更多的设计问题需要考虑，比如为了防止日志文件体积无限增长，要对数据进行压缩并清理旧版本数据记录，为了防止多个客户端在同时写入时产生脏数据，要做好并发控制。</p>
+<p>然而<code>db_get()</code>的性能就很差了，每次查询都需要扫描整个<code>database</code>文件，为了提高查询的效率，我们需要引入一个新的数据结构:索引(index)。</p>
+<p>索引的基本思想，是维护一份额外的元数据，来加速查询，类似图书的目录，帮助我们更快地定位到相关内容。</p>
+<p>虽然提高了查询性能，但是索引不是免费的午餐 ———— 它增加了数据写入的成本，写入操作不仅要写原始数据，还需要对索引进行更新。</p>
+<p>索引是数据库存储引擎设计中一个重要的权衡。数据库通常不会为所有的内容创建索引，而是需要应用开发者来指定对哪部分数据创建哪种类型的索引。</p>
+<h2 id="哈希索引"><a href="#哈希索引" class="headerlink" title="哈希索引"></a>哈希索引</h2><p>让我们从最简单的场景开始，假设我们的数据是以key-value形式存储的(现实场景中这是普遍情况)， 插入数据的时候，以追加写的方式，写入单个文件。</p>
+<p>对这类数据最简单的索引方式，是创建一个<code>HashMap</code>索引，索引的key就是数据的key，索引的value取数据在文件中的偏移量:</p>
+<p><img src="/images/media/16003048433369/16007379792606.jpg" alt></p>
+<p>只要索引的体积不是特别大，能够装载进内存，那么查询速度就会很快 ———— 根据传入的key值，从索引中读到偏移量，然后到文件中相应的位置读取数据。由于采用了追加写的方式，写操作的速度也非常快。</p>
+<p>追加写的问题在于，如果数据源源不断地被写入，磁盘终将被耗尽。为了解决这个问题，一个好的方式从单个日志文件存储的方式切分为按分段(segment)存储的方式，单个分段限制存储体积的上限，当达到这个上限时，就创建一个新的分段，后续追加的数据写入到这个新的分段中。</p>
+<p>为了减少数据存储所需空间，可以对分段进行压缩(compaction)，删除掉同一个key的过期版本。并且由于分段被压缩之后体积通常会大大减小，我们还可以把多个压缩后的小分段，合并成一个新的分段。由于数据写入之后不再被修改，压缩操作可以在一个后台线程中安全地执行。</p>
+<p>压缩操作示意图:<br><img src="/images/media/16003048433369/16008244029789.jpg" alt></p>
+<p>分段存储之后，可以为每个分段建立hash索引。查询数据的时候，首先将最新的一个分段对应的hash索引加载进内存，读出偏移量并获取相应的数据值。如果未找到所需数据，则继续查找下一个次新的分段，依次类推完成整个查询操作。</p>
+<p>采用追加写日志的方式，同一个key可能会写入多个版本的记录，初看上去比直接更新key值，更加浪费存储空间，但是追加写有一些重要的优势:</p>
+<ul>
+<li>追加写操作比随机写具有更好的性能，尤其是数据存储在机械硬盘的场景，避免了磁头寻址的开销。</li>
+<li>数据一旦写入，就不能再被修改，这种不可变属性(Immutable)能够更好地适应并发和容灾的场景。在随机写的情形，可能会发生数据更新到一半，系统出现了故障，导致脏数据的产生。</li>
+<li>对于分段的压缩与合并，可以避免数据文件碎片化的问题。</li>
+</ul>
+<p>目前的方案也存在一些缺陷:</p>
+<ul>
+<li>哈希索引必须能够被装载进内存。如果数据包含的key很多，导致索引超出了内存容量的限制，那么查询速率就会很慢。</li>
+<li>范围查询效率很差。如果需要查询<code>kitty0000</code>到<code>kitty9999</code>范围内的数据，可能需要扫描整个哈希索引。</li>
+</ul>
+<h2 id="SSTable与LSM-Tree"><a href="#SSTable与LSM-Tree" class="headerlink" title="SSTable与LSM-Tree"></a>SSTable与LSM-Tree</h2><p>为了优化上文中哈希索引方案的缺陷，我们实现分段文件时，引入两个额外的约束:</p>
+<ul>
+<li>在每个分段文件中，key-value键值对按key排序</li>
+<li>每个分段文件中，执行完压缩操作之后，单个key在该文件中只出现一次</li>
+</ul>
+<p>满足这两个约束的分段文件，被称作SSTable(Sorted String Table), 相比于之前的hash索引方案，有以下几个优势:</p>
+<ul>
+<li>为了查找某个key，我们不再需要在内存中存储所有key的索引，现在只需要稀疏地存储某些key即可。为了找到某个key，我们可以根据稀疏的has索引确定一个大致范围，然后通过二分搜索定位到想要查找的key。</li>
+</ul>
+<p>比如下图的例子，为了查找key <code>handiwork</code>, 我们首先查到<code>handbag</code> 和 <code>handsome</code> 对应的偏移量，然后在这个范围内通过二分查找，即可快速查出<code>handiwork</code></p>
+<p>  <img src="/images/media/16003048433369/16011707857761.jpg" alt></p>
+<ul>
+<li><p>范围查询也变得更加高效。基于查询范围的上界和下界，根据稀疏的hash索引，可以很快确定偏移量范围，然后批量读取数据块。</p>
+</li>
+<li><p>分段文件的合并(merge)操作也变得更加高效。因为各个分段文件是有序的，可以通过高效的归并排序，完成多个分段文件的合并。</p>
+</li>
+</ul>
+<h3 id="构造和维护SSTable"><a href="#构造和维护SSTable" class="headerlink" title="构造和维护SSTable"></a>构造和维护SSTable</h3><p>如何构造SSTable呢?我们采用的是追加写的方式，如何让生成的SSTable满足按key排序的约束呢？</p>
+<blockquote>
+<p>计算机科学领域的任何问题都可以通过增加一个间接的中间层来解决。</p>
+</blockquote>
+<p>整理磁盘中的数据使其重新变得有序成本是很高的，我们可以引入一个间接的中间层，让数据先写入内存，在内存中维护一个有序的数据结构，比如红黑树或者AVL树，然后将内存中的有序数据依次写入磁盘生成SSTable。</p>
+<p>具体的存储引擎实现方式为:</p>
+<ul>
+<li>写操作首先将数据写入内存，在内存中维护一颗有序的平衡树，这颗树也被称作<code>memtable</code>。</li>
+<li>当<code>memtable</code>的数据量超过一定阈值时，将<code>memtable</code>整体写出到磁盘，生成一个新的<code>SSTable</code>，由于<code>memtable</code>中的key是有序的，所以<code>SSTable</code>中的数据也保持有序。</li>
+<li>读请求，首先在<code>memtable</code>中查找相应的key，未找到的话，再依次查找各个<code>SSTable</code>。</li>
+<li>后台间歇性地对<code>SSTable</code>进行合并和压缩，清理过期数据。</li>
+</ul>
+<p>现在还剩一个问题需要解决，当系统发生crash时，内存中的<code>memtable</code>数据会丢失。为了避免这个问题，我们可以先把数据追加写入一个临时的日志文件，如果系统crash，可以从这个日志文件重建<code>memtable</code>，当<code>memtable</code>被写出磁盘生成SSTable之后，临时的日志文件可以被删除。</p>
+<p>这样的存储引擎实现方案被称作<code>Log-Structured Merge-Tree(LSM-Tree)</code>，其架构如下图所示:</p>
+<p><img src="/images/media/16003048433369/16013514221617.jpg" alt></p>
+<p>LSM-Tree实际工程实现的时候，还有很多技术细节需要考虑，比如当所需查找key不存在时，需要扫描<code>memtable</code>以及所有的<code>SSTable</code>，才能确定key确实存在，性能比较差。为了解决这个问题，存储引擎常常维护一个额外的布隆过滤器(Bloom filter)，通过位数组来快速判断出一个key不存在。</p>
+<h2 id="B-Tree"><a href="#B-Tree" class="headerlink" title="B-Tree"></a>B-Tree</h2><p>基于日志结构的索引存储方式正变得日渐流行，但是实际上用得最多的索引存储方式是B树，几乎所有的关系型数据库都是用B树作为索引存储结构。</p>
+<p>和<code>memtable</code>类似，B树也将key-value数据按顺序存储，但是B树在底层不是按分段文件存储，而是按页面(page)存储，每个页面通常大小为4k，这么设计是为了适配磁盘按固定大小区块的数据存储方式，每次读写以页面为单位，性能较好。</p>
+<p>每个页面中包含多个节点，每个节点包含指向子页面的指针，各个节点按数据大小排序。页面中的相邻两个节点，标识了一个数据区间 ———— 所指向的子页面的数据，其范围处于这两个节点数据数据之间。</p>
+<p>指向子页面的指针，将父子页面串联起来，构成了最终的B树，其结构如下图所示:</p>
+<p><img src="/images/media/16003048433369/16014306000210.jpg" alt></p>
+<p>以查找键值为251的节点为例，首先在根页面节点定位到200~300的范围，根据子页面的指针寻址到相应的子页面，接着在子页面中定位到250~270的范围，再寻址到相应的子页面，最终查到251节点对应的值。</p>
+<p>单个页面包含的子页面指针数量，称作B树的分支因子(branching factor)，上图中的分支因子是6。实际的应用系统中，分支因子通常在数百至数千之间，B树的高度只需要3到4层，就足以存储所有的数据。在查询数据的时候，通常只需要3到4次的寻址操作，可以迅速完成。</p>
+<h3 id="B树的可靠性"><a href="#B树的可靠性" class="headerlink" title="B树的可靠性"></a>B树的可靠性</h3><p>为了保证B树的可靠性，在系统crash时也不丢失数据，和<code>LSM-Tree</code>类似，在数据写入B树之前，首先会先写入到磁盘上的一个日志文件中，这个日志文件被称作<code>write-ahead log</code>(WAL, 也被称作redo log), 采用追加写入的方式。在crash发生时，读取WAL恢复数据。</p>
+<p>为了保证并发写入时候的数据一致性，引入了<code>latches</code>(一种轻量级的锁)，在后台将写入操作合并，并通过原子性的swap操作，用新的页面数据替换到旧的页面。</p>
+<h2 id="比较B-Tree和LSM-Tree"><a href="#比较B-Tree和LSM-Tree" class="headerlink" title="比较B-Tree和LSM-Tree"></a>比较B-Tree和LSM-Tree</h2><p>由于底层实现机制的不同，<code>LSM-Tree</code>的写操作是顺序地追加写日志文件，<code>B-Tree</code>是随机的页面粒度写，所以<code>LSM-Tree</code>的写操作通常更快一些。<code>LST-Tree</code>的读操作需要扫描<code>MemTable</code>和<code>SSTable</code>,而<code>B-Tree</code>的读操作通常指需要几次寻址操作，所以<code>B-Tree</code>的读操作通常更快一些。这个是经验法则，实际场景中还是要以实际的性能测试数据为准。</p>
+<h2 id="事务处理与数据分析"><a href="#事务处理与数据分析" class="headerlink" title="事务处理与数据分析"></a>事务处理与数据分析</h2><p>早期的业务数据处理，典型的场景是在一个事务中，向关系型数据库存入数据，然后其他应用通过索引查出数据库中的少量行，再进行后续处理。这种数据处理模式被称为在线事务处理(online transaction processing, OLTP)。</p>
+<p>除了事务处理之外，还有一种非常不同的数据分析的场景: 一次分析查询通常需要扫描很多行记录，每行记录中取出少部分列，然后做一些聚合统计分析，典型的场景例如:</p>
+<ul>
+<li>统计所有门店的一月份总营收</li>
+<li>统计上个季度销量最好的水果品类</li>
+</ul>
+<p>这种场景被称作在线数据分析(online analytic processing, OLAP)</p>
+<p>在数据总量不大(千万量级以内)时，传统关系型数据库可以同时满足OLTP和OLAP的需求，但是在大数据时代，当需要分析的数据量规模较大时，传统的关系型数据库在OLAP场景就难以满足性能要求，于是业界采用了一种新的数据库来解决OLAP场景的问题 —— 数据仓库(Data Warehouse)</p>
+<h3 id="数据仓库"><a href="#数据仓库" class="headerlink" title="数据仓库"></a>数据仓库</h3><p>数据仓库从OLTP数据库中提取(Extract)数据，转换(Transform)成适合分析场景的数据结构，然后加载(Load)到自己的存储中，供后续的数据分析场景使用。整个流程被称作<code>Extract-Transform-Load(ETL)</code>，如下图所示:</p>
+<p><img src="/images/media/16003048433369/16026389779132.jpg" alt></p>
+<p>数据仓库的一大优势在于，将后台大规模分析请求和前台OLTP数据库的高频读写请求隔离开，可以针对分析请求的场景，对底层的数据引擎进行优化。</p>
+<h4 id="数据模型"><a href="#数据模型" class="headerlink" title="数据模型"></a>数据模型</h4><p>上一篇中我们提到，OLTP数据库支持多种数据模型，比如二维行列模型、文档模型、图模型。OLAP数据库支持的数据模型比较标准化，其支持的数据模型被称作星型模型(star schema)，也被称作维度建模(dimensional modeling)。</p>
+<p>以一个零售场景举例，其数据模型如下图所示:</p>
+<p><img src="/images/media/16003048433369/16027253818811.jpg" alt></p>
+<p>在星型模型中，处于居中地位的是事实表(fact table)， 如上图中的销售明细表<code>fact_sales</code>，事实表包含了实际发生的每一个具体的事件信息，所以通常包含很多行和很多列。</p>
+<p>事实表中可以参与统计计算的列，被称作属性(attribute)，比如<code>fact_sales</code>表中的<code>discount_price</code>列，可以用来计算营收。<br>其他的一些列包含了指向外部表的外键，这些外部表被称作维度表(dimension table)，比如<code>dim_product</code>，包含了事件的维度信息。</p>
+<p>事实表处于居中地位，维度表作为外部支撑，构成了星型模型。</p>
+<p><img src="/images/media/16003048433369/16027262106232.jpg" alt></p>
+<p>实际场景中，维度表可能会比较复杂，会被进一步分解成子维度表，此时的数据模型被称作雪花模型(snowflake schema)，是星型模型的一个变种。</p>
+<p><img src="/images/media/16003048433369/16027262263381.jpg" alt></p>
+<h4 id="基于列的存储"><a href="#基于列的存储" class="headerlink" title="基于列的存储"></a>基于列的存储</h4><p>维度表数据量不大，数据查询的挑战主要在于事实表。</p>
+<p>尽管事实表通常很宽，包含数百乃至上千列，实际查询的时候，几乎不会需要扫描出许多列数据。以下面的典型SQL为例，扫描了大量的行，但是只需要获取3列数据:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">    dim_date.weekday, dim_product.category,</span><br><span class="line">    <span class="keyword">SUM</span>(fact_sales.quantity) <span class="keyword">AS</span> quantity_sold </span><br><span class="line"><span class="keyword">FROM</span> fact_sales</span><br><span class="line">    <span class="keyword">JOIN</span> dim_date <span class="keyword">ON</span> fact_sales.date_key =  dim_date.date_key</span><br><span class="line">    <span class="keyword">JOIN</span> dim_product <span class="keyword">ON</span> fact_sales.product_sk = dim_product.product_sk </span><br><span class="line"><span class="keyword">WHERE</span></span><br><span class="line">    dim_date.year = <span class="number">2013</span> <span class="keyword">AND</span></span><br><span class="line">    dim_product.category <span class="keyword">IN</span> (<span class="string">'Fresh fruit'</span>, <span class="string">'Candy'</span>) <span class="keyword">GROUP</span> <span class="keyword">BY</span></span><br><span class="line">    dim_date.weekday, dim_product.category;</span><br></pre></td></tr></table></figure>
+<p>在大部分OLTP数据库，数据是按行存储的:把属于同一行的数据存储在一起。如果是用OLTP数据库来处理上述SQL，需要加载所有相关的行，然后过滤出相关的列，加载了大量的不必要数据，可能需要很长的时间才能返回结果。</p>
+<p>所以在OLAP的场景，通常是采用按列存储的方式:把属于一列数据存储在一起，不同列分散存储，一次分析查询只需要读取少数相关的列，极大提升了查询效率。</p>
+<h4 id="列数据压缩"><a href="#列数据压缩" class="headerlink" title="列数据压缩"></a>列数据压缩</h4><p>同一列中虽然存储了大量的数据，但是其取值范围通常是有限的，许多值在同一列中重复出现。为了进一步减少磁盘存储的数据量，我们可以在按列存储的时候，对数据进行压缩。下图演示了一种基于位数组的压缩方式: </p>
+<ul>
+<li>对于在列中出现的数值，找到对应的位数组，将相应的位的值设置为1</li>
+<li>对于位数组进行压缩编码，存储压缩后的值</li>
+</ul>
+<p><img src="/images/media/16003048433369/16031136914757.jpg" alt></p>
+<h3 id="写入数据仓库"><a href="#写入数据仓库" class="headerlink" title="写入数据仓库"></a>写入数据仓库</h3><p>采用列数存储并进行压缩之后，读取数据进行分析变得更加简单高效，但是相应地，写入成本变得更高。</p>
+<p>如果我们采用了B-Tree作为底层存储，那么向压缩的列中写入一行数据，意味着几乎需要重写所有数据，这样的操作开销成本是无法接受的。</p>
+<p>幸好我们之前已经了一个更适合的解决方案 ———— <code>LSM-Tree</code>。所有的写操作首先写入内存，生成<code>Memtable</code>，在<code>Memtable</code>的体积达到阈值时生成<code>SStable</code>，通过这种方式保证了写入操作的高吞吐。</p>
+<h2 id="物化视图与Data-Cube"><a href="#物化视图与Data-Cube" class="headerlink" title="物化视图与Data Cube"></a>物化视图与Data Cube</h2><p>传统的OLTP数据库，提供了视图(view)的功能，视图提供了一个虚拟的查询的视角，可以看成SQL执行的快捷方式。由于OLTP场景下数据更新很频繁，所以视图不会直接存储查询结果。</p>
+<p>在OLAP场景，由于数据更新通常不频繁，可以将实际查询的结果缓存起来，命中缓存的查询可以迅速返回结果，这样的缓存被称作物化视图(Materialized View)。</p>
+<p><code>Data Cube</code> 是视图的一种特殊形式，存储了按多个维度聚合的查询结果。下图是一个按2个维度聚合的<code>Data Cube</code>示例，实际使用场景中可能按更多的维度聚合。</p>
+<p><img src="/images/media/16003048433369/16031188051091.jpg" alt></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本章我们深入学习了数据库引擎的底层实现，主要介绍了两种主流的实现方式，</p>
+<ul>
+<li>一种是<code>B-Tree</code>方式，将磁盘看作一系列可覆写的页，在索引的辅助下，对这些页进行随机读写。</li>
+<li>一种是<code>LSM-Tree</code>方式，追加写入日志，底层不断对日志文件做合并和压缩。</li>
+</ul>
+<p>我们也学习了两种主要的数据库场景。</p>
+<ul>
+<li>一种是面向前台用户，大量的读写请求，每次只读写一小部分数据的OLTP场景。OLTP场景通常基于某些key执行查询请求，底层的存储引擎使用索引快速找到相应的数据，性能的瓶颈在于磁盘的查找时间。基于B-Tree的存储的引擎能很好地适应这种场景。</li>
+<li>另一种是海量数据分析的OLAP场景，每次请求常常要扫描数百万乃至上亿行数据，针对某些维度做聚合统计分析。在这种场景下，索引对性能的影响已经不大，更重要的是对数据进行压缩编码以减少需要扫描的数据量，性能的瓶颈通常在磁盘的带宽。基于<code>LSM-Tree</code>的存储引擎在OLAP场景正变得愈发流行。</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://demonyangyue.github.io/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/" data-id="ckhunyku000004klzoezkapdw" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          设计数据密集型应用 —— 副本
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/09/13/bigdata-2020-09-13-data-intensive-app-2/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">设计数据密集型应用2 —— 数据模型与查询语言</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/Miscellaneous/">Miscellaneous</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/Programming/">Programming</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/Akka/">Akka</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Concurrent-Programming/">Concurrent Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Flink/">Flink</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Guava/">Guava</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Interperter/">Interperter</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Java/">Java</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/JavaScript/">JavaScript</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Mesos/">Mesos</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Meta-Programming/">Meta Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Rails/">Rails</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ruby/">Ruby</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scala/">Scala</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scheme/">Scheme</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Spark/">Spark</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Streaming-System/">Streaming System</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Web/">Web</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/jQuery/">jQuery</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/杂项/">杂项</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/Akka/" style="font-size: 16.67px;">Akka</a> <a href="/tags/Big-Data/" style="font-size: 13.33px;">Big Data</a> <a href="/tags/Cloud-Computing/" style="font-size: 20px;">Cloud Computing</a> <a href="/tags/Concurrent-Programming/" style="font-size: 10px;">Concurrent Programming</a> <a href="/tags/Flink/" style="font-size: 11.67px;">Flink</a> <a href="/tags/Guava/" style="font-size: 10px;">Guava</a> <a href="/tags/Interperter/" style="font-size: 10px;">Interperter</a> <a href="/tags/Java/" style="font-size: 11.67px;">Java</a> <a href="/tags/JavaScript/" style="font-size: 15px;">JavaScript</a> <a href="/tags/Mesos/" style="font-size: 10px;">Mesos</a> <a href="/tags/Meta-Programming/" style="font-size: 13.33px;">Meta Programming</a> <a href="/tags/Rails/" style="font-size: 16.67px;">Rails</a> <a href="/tags/Ruby/" style="font-size: 13.33px;">Ruby</a> <a href="/tags/Scala/" style="font-size: 18.33px;">Scala</a> <a href="/tags/Scheme/" style="font-size: 10px;">Scheme</a> <a href="/tags/Spark/" style="font-size: 10px;">Spark</a> <a href="/tags/Streaming-System/" style="font-size: 11.67px;">Streaming System</a> <a href="/tags/Web/" style="font-size: 16.67px;">Web</a> <a href="/tags/jQuery/" style="font-size: 15px;">jQuery</a> <a href="/tags/杂项/" style="font-size: 10px;">杂项</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/11/">November 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/05/">May 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">January 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">December 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">September 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/08/">August 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/05/">May 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">April 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">September 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/06/">June 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/05/">May 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/04/">April 2015</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/">设计数据密集型应用 —— 分区</a>
+          </li>
+        
+          <li>
+            <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/">设计数据密集型应用 —— 副本</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/">设计数据密集型应用3 —— 数据存储与读取</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/13/bigdata-2020-09-13-data-intensive-app-2/">设计数据密集型应用2 —— 数据模型与查询语言</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/06/bigdata-2020-09-06-data-intensive-app-1/">设计数据密集型应用1 —— 序</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 Yang, Yue<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>

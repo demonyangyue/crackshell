@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="utf-8">
+  
+  <title>设计数据密集型应用 —— 副本 | crackshell</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="数据分布式存储我们已经介绍了单个机器节点处理数据的相关知识，在大数据场景，单机节点已经无法满足业务需求，接下来我们学习分布式数据处理的相关知识。">
+<meta name="keywords" content="Cloud Computing,Big Data">
+<meta property="og:type" content="article">
+<meta property="og:title" content="设计数据密集型应用 —— 副本">
+<meta property="og:url" content="http://demonyangyue.github.io/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/index.html">
+<meta property="og:site_name" content="crackshell">
+<meta property="og:description" content="数据分布式存储我们已经介绍了单个机器节点处理数据的相关知识，在大数据场景，单机节点已经无法满足业务需求，接下来我们学习分布式数据处理的相关知识。">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16033298529729/16035520277647.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16033298529729/16046267242459.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16033298529729/16049746912617.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16033298529729/16051514721564.jpg">
+<meta property="og:image" content="http://demonyangyue.github.io/images/media/16033298529729/16051536807301.jpg">
+<meta property="og:updated_time" content="2020-11-23T15:41:25.998Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="设计数据密集型应用 —— 副本">
+<meta name="twitter:description" content="数据分布式存储我们已经介绍了单个机器节点处理数据的相关知识，在大数据场景，单机节点已经无法满足业务需求，接下来我们学习分布式数据处理的相关知识。">
+<meta name="twitter:image" content="http://demonyangyue.github.io/images/media/16033298529729/16035520277647.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="crackshell" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">crackshell</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">Hack on heaven&#39;s door</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://demonyangyue.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-bigdata-2020-10-27-data-intensive-app-4" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/" class="article-date">
+  <time datetime="2020-10-26T16:00:00.000Z" itemprop="datePublished">2020-10-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/Programming/">Programming</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      设计数据密集型应用 —— 副本
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="数据分布式存储"><a href="#数据分布式存储" class="headerlink" title="数据分布式存储"></a>数据分布式存储</h2><p>我们已经介绍了单个机器节点处理数据的相关知识，在大数据场景，单机节点已经无法满足业务需求，接下来我们学习分布式数据处理的相关知识。</p>
+<a id="more"></a>
+<h3 id="原因"><a href="#原因" class="headerlink" title="原因"></a>原因</h3><p>采用分布式数据处理的原因:</p>
+<ul>
+<li>可扩展性(Scalability)。当数据点读负载或者写负载超出单机处理能力的时候，可以将读写负载分布到多台机器上。</li>
+<li>高可用(Fault tolerance/high availability)。当某个机器节点出现问题无法继续提供服务的时候，可以将请求路由到其他节点，从而使整体服务不受影响。</li>
+<li>低延时(Low latency)。可以将机器部署在世界各地的不同机房，当不同地区的用户访问时，选择就近的机器提供服务，减少服务的延时。</li>
+</ul>
+<h3 id="副本和分区"><a href="#副本和分区" class="headerlink" title="副本和分区"></a>副本和分区</h3><p><code>副本</code>(Replication)和<code>分区</code>(Partitioning,也称作Sharding)是数据分布式存储的两种方式:</p>
+<ul>
+<li>副本。将同一数据复制多份，分布存储到不同的机器节点。副本提供了冗余性，如果部分节点失效了，可以通过其他节点上的副本继续提供服务。</li>
+<li>分区。将大数据库切分成多个子集，每个子集分布存储到不同的机器节点。分区解决了单个节点容量不足的问题。</li>
+</ul>
+<p>在实际的大数据处理场景中，副本和分区通常被结合使用。下图是一个被切分成两个分区，每个分区存储两个副本的示例:</p>
+<p><img src="/images/media/16033298529729/16035520277647.jpg" alt></p>
+<p>本章我们先来介绍一下副本的相关原理。</p>
+<h2 id="副本"><a href="#副本" class="headerlink" title="副本"></a>副本</h2><p>如果数据是永远不变的，那么副本的实现将会非常简单 ———— 将数据复制到各个节点即可。在分布式系统中，副本实现的主要技术挑战，在于数据不断变化的过程中，在节点之间实现<strong>数据同步</strong>。</p>
+<p>主流的副本模式有三种:单主(single-leader)模式、多主(multi-leader)模式、无主(leaderless)模式。现实场景中，有很多的实现细节需要考量，比如是采用同步还是异步的方式更新副本，如何处理出错的副本。</p>
+<h2 id="单主模式"><a href="#单主模式" class="headerlink" title="单主模式"></a>单主模式</h2><p>存储在节点中的数据备份被称作副本，副本需要解决的核心问题是:集群中发生一次写入操作之后，如何保证所有副本中的数据都是一致的？</p>
+<p>最常见的解决方案是基于主从节点(leader-based replication)的复制，具体步骤如下:</p>
+<ul>
+<li>首先在集群中确定一个主节点，客户端的任何写入操作，首先将数据发送到主节点，写入主节点的本地存储。</li>
+<li>主节点的数据变更，通过日志(replication log)或者数据流(change stream)的形式，发送给所有的从节点。</li>
+<li>从节点在本地执行这些变更，从而保证和主节点数据的一致性。</li>
+</ul>
+<p>对于客户端来说，数据既可以访问主节点，也可以访问从节点。但是写入数据只能是访问主节点。</p>
+<p>在主流的关系数据库比如<code>PostgreSQL</code>、<code>MySQL</code>、<code>Oracle</code>、<code>SQL Server</code>中，非关系型数据库<code>MongoDB</code>，以及消息中间件<code>Kafka</code>、<code>RabbitMQ</code>，都采用了这种基于主从节点的副本复制模式。</p>
+<h3 id="同步与异步复制"><a href="#同步与异步复制" class="headerlink" title="同步与异步复制"></a>同步与异步复制</h3><p>副本的写入操作采用同步还是异步的方式，是一个需要重点关注的细节。</p>
+<p>举一个例子，社交网站上的某位用户，执行了更新头像的操作:<br><img src="/images/media/16033298529729/16046267242459.jpg" alt></p>
+<ul>
+<li>从节点1(Follower1)的复制被配置为同步方式:主节点的数据变更，发送到从节点1之后，需要等待从节点1返回写入成功的响应。</li>
+<li>从节点2(Follower2)的复制被配置为异步方式:主节点的数据变更，发送到从节点2，但是不需要等待从节点2的执行结果。</li>
+</ul>
+<p>同步复制的优势在于，可以保证从节点的数据和主节点是强一致的，就算主节点挂了，我们也可以在从节点读到最新的数据。同步复制的劣势在于，如果从节点挂了或者发生了网络延迟，响应不能及时返回，主节点就需要一直等待，整个集群的写入操作就会被阻塞。</p>
+<p>在实际的生产集群中，把所有从节点的配置为同步复制模式是不现实的，任何一个从节点发生问题都会造成集群的写入操作阻塞。</p>
+<p>实际常常使用一种半同步(semi-synchronous)的方式:将一个从节点配置为同步复制模式，其他从节点配置为异步复制，这样就可以保证集群中至少有两个节点存储了最新数据。当同步模式的从节点不能及时返回数据时，从其他的异步从节点选择一个，切换到同步模式。</p>
+<p>实际生产集群中还常常把所有的从节点都配置为异步复制模式。优势在于就是集群中所有的从节点都发生了延迟，也不会阻塞主节点的写入操作。缺陷在于当主节点<code>fail over</code>的时候，部分已写入数据可能会丢失。</p>
+<h3 id="处理节点服务中断"><a href="#处理节点服务中断" class="headerlink" title="处理节点服务中断"></a>处理节点服务中断</h3><p>分布式系统中的每一个节点都有可能发生服务中断，可能是由于机器重启，也可能是由于系统维护。如何让集群的整体服务，免于个别节点服务中断的影响，以实现整体的高可用呢？</p>
+<h3 id="从节点失败"><a href="#从节点失败" class="headerlink" title="从节点失败"></a>从节点失败</h3><p>从节点失败之后的错误恢复相对简单：</p>
+<ol>
+<li>每个从节点在本地磁盘记录已经成功执行的变更日志。</li>
+<li>当从节点从失败中恢复之后，会重新连接上主节点。基于本地记录的上一次成功操作的点位，拉取失败期间，需要执行的变更。</li>
+<li>从节点重新执行这些变更，从而追上(Catch-up)主节点。</li>
+</ol>
+<h3 id="主节点失败"><a href="#主节点失败" class="headerlink" title="主节点失败"></a>主节点失败</h3><p>主节点失败之后的恢复过程相对复杂一些，整个过程被称作<code>failover</code>：</p>
+<ol>
+<li>确定主节点已经失败。集群可以依据一些标准，来判断出主节点确实已经失败了，比如30秒没有收到主节点的心跳信息，以便启动<code>failover</code>过程。</li>
+<li>在集群的其他从节点中，选举出一个新的主节点。这步可以通过领导者选举算法(比如Paxos)来实现。</li>
+<li>重新配置系统使主节点生效。</li>
+</ol>
+<p>主节点恢复需要考虑几个问题:</p>
+<ul>
+<li>如果集群采用的是异步模式，那么在主节点failover的时候，集群中可能会出现数据丢失，因为可能每个从节点都存在数据落后的情况。</li>
+<li>当之前挂掉的主节点，重新连入集群的时候，可能会错误地认为自己仍然是主节点，整个集群中就会同时存在两个主节点，发生<code>脑裂</code>(brain split)的情况，导致整个集群无法正常运转。</li>
+</ul>
+<p>节点失败、不可靠的网络、可用性和一致性之间的权衡、数据延迟等待问题，是分布式系统设计中绕不开的话题。</p>
+<h3 id="副本复制的实现"><a href="#副本复制的实现" class="headerlink" title="副本复制的实现"></a>副本复制的实现</h3><p>在单个主节点的集群中，副本复制可以有多种实现方式：</p>
+<h4 id="基于执行语句的复制"><a href="#基于执行语句的复制" class="headerlink" title="基于执行语句的复制"></a>基于执行语句的复制</h4><p>这是最容易想到的实现方式，把主节点上执行的数据修改相关语句(INSERT、UPDATE、DELETE)，在从节点上也执行一次，这样从节点就可以和主节点保持一致。</p>
+<p>线上场景中可能会遇到以下问题:</p>
+<ul>
+<li>某些没有确定结果的操作，比如<code>NOW()</code>,<code>RAND()</code>，在从节点执行的时候结果和主节点不一致。</li>
+<li>如果语句的执行结果受已有的数据影响，比如<code>UPDATE ... WHERE &lt;some condition&gt;</code>，那么从节点上就需要按照和主节点完全一样的顺序来执行这些语句，这在并发更新的场景并不容易实现。</li>
+</ul>
+<p>在MySQL5.1之前的版本，副本复制采用的是基于执行语句的模式，由于上面提到的种种问题，新版的MySQL已经废弃了这种方式。</p>
+<h4 id="基于Write-ahead-log的复制"><a href="#基于Write-ahead-log的复制" class="headerlink" title="基于Write-ahead log的复制"></a>基于Write-ahead log的复制</h4><p>上一章讲数据库存储引擎实现的时候，我们提到了<code>Write-ahead log</code>(WAL)，副本复制也可以使用WAL。</p>
+<p>WAL中包含了包含所有写入<strong>结果</strong>信息的字节序列，从节点接受主节点点发送的WAL并执行，构建和主节点完全一致的数据结果。</p>
+<p><code>PostgresSQL</code>和<code>Oracle</code>使用了这种副本复制方式。WAL方式的主要劣势在于，它描述的是磁盘区块的字节变动信息，偏底层，无法兼容不同版本的数据库实现。</p>
+<h4 id="基于逻辑日志的复制"><a href="#基于逻辑日志的复制" class="headerlink" title="基于逻辑日志的复制"></a>基于逻辑日志的复制</h4><p>另一种实现副本复制的方式是采用与存储引擎无关的逻辑日志，以数据行为粒度来描述数据更新的结果:</p>
+<ul>
+<li>对于插入操作，逻辑日志包含所有列的新值。</li>
+<li>对于删除操作，逻辑日志中包含需要删除的数据行的唯一标识。(通常是主键)</li>
+<li>对于更新操作，逻辑日志包含被更新行的相关列的所有数据。</li>
+</ul>
+<p>对于更新了多行数据的事务操作，逻辑日志中加入一条额外记录来标识事务提交信息。<code>Mysql</code>的<code>binlog</code>就采用了这种方式。</p>
+<p>逻辑日志让副本复制与存储引擎解耦，不受存储引擎内部实现方式的约束，还可以用来把数据变更同步到外部系统，比如OLAP数据分析引擎。</p>
+<h3 id="复制延迟的问题"><a href="#复制延迟的问题" class="headerlink" title="复制延迟的问题"></a>复制延迟的问题</h3><p>在分布式系统中，当处理大部分都是读请求的场景时，通过增加从节点数量来实现负载均衡，并提高集群的吞吐能力，是十分有效的。</p>
+<p>这种<code>读扩展</code>(read-scaling)架构，需要使用异步复制模式，以避免单个节点失败阻塞整个集群。在异步复制模式下，数据复制延迟是一个无法避免的问题，从节点和主节点之间的数据并没有强一致性保障，只能保证<code>最终一致性</code>(eventual consistency)，但是<code>最终</code>是何时，就像<code>永远是多远</code>一样，是一个并不确定的保证。</p>
+<p>理论上可以通过分布式事务来实现集群中节点之间的强一致性，但是分布式事务在现实世界中困难重重，这里就不详细展开了。</p>
+<h2 id="无主模式"><a href="#无主模式" class="headerlink" title="无主模式"></a>无主模式</h2><p>上文描述的是基于单个主节点(single-leader)的副本复制模式，也有一些其他的系统采用了无主节点(leaderless)的模式，比如亚马逊著名的<code>Dynamo</code>，以及开源的<code>Cassandra</code>、<code>Riak</code>，都采用了无主模式，集群中的任意一个节点都可以从客户端接收写入操作。</p>
+<h3 id="一个节点挂掉"><a href="#一个节点挂掉" class="headerlink" title="一个节点挂掉"></a>一个节点挂掉</h3><p>首先我们来一个最简单的场景，假设一个采用无主模式的数据库集群，由3个副本节点构成，其中的一个节点挂了。当客户端同时这3个节点发送写请求的时候，会发生什么呢？</p>
+<p><img src="/images/media/16033298529729/16049746912617.jpg" alt></p>
+<p>和单主节点模式不同的是，由于无主模式场景中不存在主节点，所以不需要通过failover操作来重新选出主节点。</p>
+<p>客户端向3个节点发出写请求之后，由于有一个从节点挂了，剩余的两个从节点会返回ok，数据库集群认为本次写入操作已经成功。</p>
+<p>当挂掉的节点重新连上集群之后，客户端同时从多个节点读取数据时，就可以根据<code>版本号</code>(version number)，发现重新连入节点的数据是<code>过期</code>(stale)的，为了实现数据最终一致性的目标，集群会采用以下两种方式:</p>
+<ul>
+<li>读修复<ul>
+<li>读操作发现过期数据之后，会额外发起一次写操作，让过期数据追上最新版本的数据。比如上图的示例中，客户端同时读到了版本6和版本7的数据，那么会重新发起一次写请求将节点3上面的数据更新到版本7。</li>
+</ul>
+</li>
+<li>后台整理<ul>
+<li>除了读修复之外，某些数据存储系统还会在后台启动一个进程，持续扫描各个副本之间的数据差异，更新落后的数据。</li>
+</ul>
+</li>
+</ul>
+<h3 id="法定数目-Quorum"><a href="#法定数目-Quorum" class="headerlink" title="法定数目(Quorum)"></a>法定数目(Quorum)</h3><p>在上图的场景中，当向3个副本同时发送写请求之后，只要其中的两个副本返回OK，我们就认为写入成功了。那么在后续的读取中，需要同时读取多少个副本，才能保证可以读到最新版本的数据呢？</p>
+<p>两个副本返回OK，只有一个副本上的节点数据是过期的，所以后续读取的时候，从2个副本中读取数据，就能确保能够读取到最新版本的数据。</p>
+<p>就像选举需要达到法定票数才能通过一样，读写副本的数量也需要达到一个法定数目，才能确保能够读取到最新版本的数据。</p>
+<p>在通用的场景，假设集群中有n个副本，每次写操作需要w个节点确认ok，每次读操作需要获取r个节点的数据，那么当满足<code>w + r &gt; n</code>时，结合版本号信息，就能确保读到最新的数据。</p>
+<p>在实际场景中，参数n、w、r通常都是可以配置的。机器数量n通常被设置为奇数，w、r通常配置为<code>w=r=(n+1)/2</code>。</p>
+<h3 id="处理并发写入"><a href="#处理并发写入" class="headerlink" title="处理并发写入"></a>处理并发写入</h3><p>无主模式允许多个客户端同时向不同的节点写入数据，那么不可避免地会遇到并发问题，如果没有恰当处理的话，整个集群就会陷入数据不一致的状态。</p>
+<p>以下图为例:</p>
+<p><img src="/images/media/16033298529729/16051514721564.jpg" alt></p>
+<ul>
+<li>节点1收到了客户端A的写入请求，但由于网络原因为未收到客户端B的写入请求。</li>
+<li>节点2首先收到了客户端A的写入请求，然后又收到了客户端B的写入请求。</li>
+<li>节点3首先收到了客户端B的写入请求，然后又收到了客户端A的写入请求。</li>
+</ul>
+<p>如果简单地采用覆盖式写入算法的话，节点1和节点3会认为X的最终值是A，节点2会认为X的最终值是B，整个集群就会陷入数据不一致的状态。</p>
+<p>所以简单的覆盖式写入算法不可行，我们需要找到合适的算法来解决并发写入的问题。</p>
+<h4 id="采纳最新一次写入"><a href="#采纳最新一次写入" class="headerlink" title="采纳最新一次写入"></a>采纳最新一次写入</h4><p>一种简单的方案，是在并发写入的场景中，采纳最新一次写入(Last write wins, LWW)。</p>
+<p>这要求集群中所有节点对什么是<strong>最新一次写入</strong>，达成一致共识。一种可行的策略是在每次写入操作中，基于<code>事件发生时间</code>(Event Time)打上时间戳。在发生并发写入的时候，只保留最新时间戳的数据。</p>
+<p>LWW可以实现最终一致性的目标，但是劣势在于牺牲了持久性，并发写入时，时间上较早的写入会被丢弃掉。在某些场景中，比如分布式缓存，只记录最新一次写入是可行的，但如果是所有写入操作都需要完整记录的场景，LWW就不合适了。</p>
+<h4 id="合并并发写入的值"><a href="#合并并发写入的值" class="headerlink" title="合并并发写入的值"></a>合并并发写入的值</h4><p>多人同时向代码仓库提交代码的时候，代码库自动对代码做合并(merge)。多客户端同时向集群写入数据的时候，也可以采用类型的方式做合并。</p>
+<p>举个例子，假设客户1和客户2并发向同一个购物车中添加数据，需要注意的是，数据库不负责合并数据，数据合并的逻辑在客户端代码中实现。</p>
+<p><img src="/images/media/16033298529729/16051536807301.jpg" alt></p>
+<ol>
+<li>客户1向购物车添加数据<code>milk</code>，数据库中存储的数据为版本1:[milk]。</li>
+<li>客户2向购物车并发添加数据<code>egg</code>，并且不知道客户1也在同时添加数据。数据库将本次写入操作标记为版本2，由于不知道该如何做合并，数据库同时保存两个分裂的数据:[milk],[egg]</li>
+<li>客户端1向购物车中继续添加<code>flour</code>，认为数据应该变成[milk,flour]，于是把这个值发送给数据库，并且带上版本号<code>version 1</code>。数据库把[milk]更新成[milk,flour]，并打上新的版本号<code>version 3</code>，但是之前的<code>version 2</code>数据[egg]仍然被保留。</li>
+<li>与此同时，客户端2并发向购物车中添加<code>ham</code>。上一步客户端1执行的操作，由于是并发的，客户端2此时还未能读到上一步的结果，所以客户端2读到的数据是[milk]和[egg]。客户端2此时执行一次<strong>合并操作</strong>，生成新数据[egg,milk,ham],连同<code>version 2</code>一起发送到数据库。数据库把之前版本2的数据[eggs]更新为[egg,milk,ham]，并打上新的版本号<code>version 4</code>，但仍然保留版本3数据[milk, flour]。</li>
+<li>最后，客户端1并发向购物车中添加<code>bacon</code>，和上一步同理，数据库中的数据从版本3[milk,flour]被更新到版本5[milk, flour, eggs, bacon]，版本4数据[egg,milk,ham]仍然被保留。</li>
+</ol>
+<p>上述过程描述了当客户端存在并发写入时，数据库中的数据变化状态，和LWW不同，这里每一步写操作都没有被丢弃。当然，一个购物车不能并存两份数据，为了实现最终一致性，这两份数据最终会以某种方式被合并。可能的方式是取并集，最终购物车的数据为 [milk, flour, eggs, bacon, ham]。</p>
+<h4 id="版本向量-Version-vectors"><a href="#版本向量-Version-vectors" class="headerlink" title="版本向量(Version vectors)"></a>版本向量(Version vectors)</h4><p>上面的例子中，我们描述了在无主模式的集群中，单个副本的情况下，如何通过一个递增的版本号，来解决并发写入时的数据合并，实现最终一致性的目标。</p>
+<p>现实情况要更加复杂，因为集群中有多个副本，单个递增的版本号就不足够了，我们需要为每个副本都维护一个版本号，整个集群需要维护一组版本号，称作版本向量(Version vectors)。</p>
+<p>版本向量也常常被称作向量时钟，实际上两者之间有一些细微的差别，这里就不展开叙述了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本章主要描述了副本的实现。</p>
+<p>使用副本的原因包括:<code>高可用</code>(High availability)、<code>低延时</code>(Low latency)、<code>可扩展</code>(Scalability)。</p>
+<p>对于副本的实现，我们描述了单主模式和无主模式场景下，是如何通过各种手段，来解决副本实现的核心难题 ———— 副本间数据一致性，以达到最终一致性目标。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://demonyangyue.github.io/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/" data-id="ckhupre8800000ulznvnj5cad" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          设计数据密集型应用 —— 分区
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">设计数据密集型应用3 —— 数据存储与读取</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/Miscellaneous/">Miscellaneous</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/Programming/">Programming</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/Akka/">Akka</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Big-Data/">Big Data</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Cloud-Computing/">Cloud Computing</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Concurrent-Programming/">Concurrent Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Flink/">Flink</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Guava/">Guava</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Interperter/">Interperter</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Java/">Java</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/JavaScript/">JavaScript</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Mesos/">Mesos</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Meta-Programming/">Meta Programming</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Rails/">Rails</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ruby/">Ruby</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scala/">Scala</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scheme/">Scheme</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Spark/">Spark</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Streaming-System/">Streaming System</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Web/">Web</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/jQuery/">jQuery</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/杂项/">杂项</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/Akka/" style="font-size: 16.67px;">Akka</a> <a href="/tags/Big-Data/" style="font-size: 13.33px;">Big Data</a> <a href="/tags/Cloud-Computing/" style="font-size: 20px;">Cloud Computing</a> <a href="/tags/Concurrent-Programming/" style="font-size: 10px;">Concurrent Programming</a> <a href="/tags/Flink/" style="font-size: 11.67px;">Flink</a> <a href="/tags/Guava/" style="font-size: 10px;">Guava</a> <a href="/tags/Interperter/" style="font-size: 10px;">Interperter</a> <a href="/tags/Java/" style="font-size: 11.67px;">Java</a> <a href="/tags/JavaScript/" style="font-size: 15px;">JavaScript</a> <a href="/tags/Mesos/" style="font-size: 10px;">Mesos</a> <a href="/tags/Meta-Programming/" style="font-size: 13.33px;">Meta Programming</a> <a href="/tags/Rails/" style="font-size: 16.67px;">Rails</a> <a href="/tags/Ruby/" style="font-size: 13.33px;">Ruby</a> <a href="/tags/Scala/" style="font-size: 18.33px;">Scala</a> <a href="/tags/Scheme/" style="font-size: 10px;">Scheme</a> <a href="/tags/Spark/" style="font-size: 10px;">Spark</a> <a href="/tags/Streaming-System/" style="font-size: 11.67px;">Streaming System</a> <a href="/tags/Web/" style="font-size: 16.67px;">Web</a> <a href="/tags/jQuery/" style="font-size: 15px;">jQuery</a> <a href="/tags/杂项/" style="font-size: 10px;">杂项</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/11/">November 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/05/">May 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">April 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">January 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">February 2017</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">December 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">September 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/08/">August 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/05/">May 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">April 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">September 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/06/">June 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/05/">May 2015</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/04/">April 2015</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/11/23/bigdata-2020-11-23-data-intensive-app-5/">设计数据密集型应用 —— 分区</a>
+          </li>
+        
+          <li>
+            <a href="/2020/10/27/bigdata-2020-10-27-data-intensive-app-4/">设计数据密集型应用 —— 副本</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/20/bigdata-2020-09-20-data-intensive-app-3/">设计数据密集型应用3 —— 数据存储与读取</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/13/bigdata-2020-09-13-data-intensive-app-2/">设计数据密集型应用2 —— 数据模型与查询语言</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/06/bigdata-2020-09-06-data-intensive-app-1/">设计数据密集型应用1 —— 序</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 Yang, Yue<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
